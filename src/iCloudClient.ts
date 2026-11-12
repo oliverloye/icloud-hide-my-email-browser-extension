@@ -3,11 +3,10 @@ export class UnsuccessfulRequestError extends Error {}
 type ServiceName = 'premiummailsettings';
 
 export const DEFAULT_SETUP_URL = 'https://setup.icloud.com/setup/ws/1';
-export const CN_SETUP_URL = 'https://setup.icloud.com.cn/setup/ws/1';
 
 class ICloudClient {
   constructor(
-    readonly setupUrl: typeof DEFAULT_SETUP_URL | typeof CN_SETUP_URL,
+    readonly setupUrl: typeof DEFAULT_SETUP_URL,
     public webservices?: Record<ServiceName, { url: string; status: string }>
   ) {}
 

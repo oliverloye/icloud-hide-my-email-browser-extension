@@ -8,7 +8,6 @@ import {
 import ICloudClient, {
   PremiumMailSettings,
   DEFAULT_SETUP_URL,
-  CN_SETUP_URL,
 } from '../../iCloudClient';
 import {
   ActiveInputElementWriteData,
@@ -28,7 +27,54 @@ import {
 } from './constants';
 import { isFirefox } from '../../browserUtils';
 
+// ===== Request header rules =====
+
+// iCloud only accepts API requests that carry the Origin and Referer of
+// icloud.com. The rule below rewrites those headers, and is scoped to requests
+// that are initiated by this extension and target icloud.com. Since the
+// extension's origin is only known at runtime, the rule is registered
+// dynamically instead of through a static ruleset.
+const HEADER_RULE_ID = 1;
+
+const installHeaderRules = async (): Promise<void> => {
+  const extensionHost = new URL(browser.runtime.getURL('')).hostname;
+
+  await browser.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [HEADER_RULE_ID],
+    addRules: [
+      {
+        id: HEADER_RULE_ID,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            {
+              header: 'Origin',
+              operation: 'set',
+              value: 'https://www.icloud.com',
+            },
+            {
+              header: 'Referer',
+              operation: 'set',
+              value: 'https://www.icloud.com/',
+            },
+          ],
+        },
+        condition: {
+          requestDomains: ['icloud.com'],
+          initiatorDomains: [extensionHost],
+          resourceTypes: ['xmlhttprequest'],
+        },
+      },
+    ],
+  });
+};
+
+const headerRulesReady = installHeaderRules().catch(console.error);
+
 const constructClient = async (): Promise<ICloudClient> => {
+  await headerRulesReady;
+
   const clientState = await getBrowserStorageValue('clientState');
 
   if (clientState === undefined) {
@@ -286,24 +332,21 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 // as enabled.
 browser.webRequest.onResponseStarted.addListener(
   async (details: browser.WebRequest.OnResponseStartedDetailsType) => {
-    const { statusCode, url } = details;
-    if (statusCode < 200 && statusCode > 299) {
+    const { statusCode } = details;
+    if (statusCode < 200 || statusCode > 299) {
       console.debug('Request failed', details);
       return;
     }
 
-    const setupUrl = url.split('/accountLogin')[0] as ICloudClient['setupUrl'];
-    const client = new ICloudClient(setupUrl);
+    await headerRulesReady;
+    const client = new ICloudClient(DEFAULT_SETUP_URL);
     const isAuthenticated = await client.isAuthenticated();
     if (isAuthenticated) {
       performAuthSideEffects(client, { notification: true });
     }
   },
   {
-    urls: [
-      `${DEFAULT_SETUP_URL}/accountLogin*`,
-      `${CN_SETUP_URL}/accountLogin*`,
-    ],
+    urls: [`${DEFAULT_SETUP_URL}/accountLogin*`],
   },
   []
 );
@@ -313,7 +356,7 @@ browser.webRequest.onResponseStarted.addListener(
 browser.webRequest.onResponseStarted.addListener(
   async (details: browser.WebRequest.OnResponseStartedDetailsType) => {
     const { statusCode } = details;
-    if (statusCode < 200 && statusCode > 299) {
+    if (statusCode < 200 || statusCode > 299) {
       console.debug('Request failed', details);
       return;
     }
@@ -321,7 +364,7 @@ browser.webRequest.onResponseStarted.addListener(
     performDeauthSideEffects();
   },
   {
-    urls: [`${DEFAULT_SETUP_URL}/logout*`, `${CN_SETUP_URL}/logout*`],
+    urls: [`${DEFAULT_SETUP_URL}/logout*`],
   },
   []
 );

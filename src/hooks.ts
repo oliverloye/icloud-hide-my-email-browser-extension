@@ -5,7 +5,7 @@ import {
   SetStateAction,
   useCallback,
 } from 'react';
-import isEqual from 'lodash.isequal';
+import { isEqual } from './utils';
 import {
   getBrowserStorageValue,
   setBrowserStorageValue,
