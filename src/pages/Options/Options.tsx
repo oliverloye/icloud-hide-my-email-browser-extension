@@ -9,8 +9,7 @@ import {
   TitledComponent,
   Link,
 } from '../../commonComponents';
-import startCase from 'lodash.startcase';
-import isEqual from 'lodash.isequal';
+import { isEqual, startCase } from '../../utils';
 import { DEFAULT_STORE } from '../../storage';
 
 const SELECT_FWD_TO_SIGNED_OUT_CTA_COPY =

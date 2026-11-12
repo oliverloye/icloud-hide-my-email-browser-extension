@@ -34,12 +34,17 @@ type AutofillableInputElement = {
   };
 };
 
+// Addresses that have been generated for a given button, keyed by button ID.
+// The address to reserve is read from here rather than from the DOM, as the
+// button lives in the page and its content can be altered by the page.
+const generatedHmes = new Map<string, string>();
+
 const disableButton = (
   btn: HTMLButtonElement,
   cursorClass: string,
   copy: string
 ): void => {
-  btn.innerHTML = copy;
+  btn.textContent = copy;
   btn.setAttribute('disabled', 'true');
   btn.classList.remove(className('hover-button'));
   btn.classList.forEach((name) => {
@@ -55,7 +60,7 @@ const enableButton = (
   cursorClass: string,
   copy: string
 ): void => {
-  btn.innerHTML = copy;
+  btn.textContent = copy;
   btn.removeAttribute('disabled');
   btn.classList.add(className('hover-button'));
   btn.classList.forEach((name) => {
@@ -90,6 +95,7 @@ const makeButtonSupport = (
   inputElement.addEventListener('focus', inputOnFocusCallback);
 
   const inputOnBlurCallback = () => {
+    generatedHmes.delete(btnElementId);
     disableButton(btnElement, 'cursor-not-allowed', LOADING_COPY);
     btnElement.remove();
   };
@@ -98,7 +104,13 @@ const makeButtonSupport = (
 
   const btnOnMousedownCallback = async (ev: MouseEvent) => {
     ev.preventDefault();
-    const hme = btnElement.innerHTML;
+    const hme = generatedHmes.get(btnElementId);
+    // Only react to genuine user clicks on a button that holds an address.
+    // Pages are able to dispatch synthetic events on the button.
+    if (!ev.isTrusted || hme === undefined) {
+      return;
+    }
+    generatedHmes.delete(btnElementId);
     disableButton(btnElement, 'cursor-progress', LOADING_COPY);
     await browser.runtime.sendMessage({
       type: MessageType.ReservationRequest,
@@ -233,6 +245,7 @@ export default async function main(): Promise<void> {
             break;
           }
 
+          generatedHmes.set(elementId, hme);
           enableButton(element, 'cursor-pointer', hme);
         }
         break;
